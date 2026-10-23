@@ -12,7 +12,7 @@ _CMD_RE = re.compile(
     r'^"(?P<tag>[^"]+)"\s+(?P<verb>get|set|subscribe|unsubscribe)\s+(?P<attr>\w+)'
     r"(?P<rest>.*)$"
 )
-_INDEX_ATTRS = {"level", "mute"}
+_INDEX_ATTRS = {"level", "mute", "inputLabel"}
 
 Key = tuple[str, str, int | None]
 
@@ -28,6 +28,8 @@ def clean(data: bytes) -> str:
 def fmt(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
+    if isinstance(value, str):
+        return f'"{value}"'
     return str(value)
 
 
@@ -62,11 +64,12 @@ class FakeTesira:
 
     async def stop(self) -> None:
         """Stop listening and drop every connection."""
-        if self._server is not None:
-            self._server.close()
-            await self._server.wait_closed()
-            self._server = None
+        server, self._server = self._server, None
+        if server is not None:
+            server.close()
         await self.drop_connections()
+        if server is not None:
+            await server.wait_closed()
 
     async def drop_connections(self) -> None:
         for writer in list(self._writers):

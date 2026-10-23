@@ -1,0 +1,115 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Biamp Tesira",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Username (optional)",
+          "password": "Password (optional)",
+          "name": "Name"
+        },
+        "data_description": {
+          "host": "IP address or host name of the Tesira.",
+          "port": "TTP/Telnet port, normally 23.",
+          "name": "Becomes the device name and part of the entity IDs."
+        }
+      },
+      "reconfigure": {
+        "title": "Change connection",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Username (optional)",
+          "password": "Password (optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to the Tesira. Check host and port.",
+      "invalid_auth": "The Tesira asks for a login, or the login was rejected.",
+      "unknown": "Unexpected error. See the log."
+    },
+    "abort": {
+      "already_configured": "This Tesira is already set up.",
+      "reconfigure_successful": "The connection was updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Biamp Tesira",
+        "menu_options": {
+          "zones": "Zones",
+          "sources": "Source lists",
+          "levels": "Volume limits"
+        }
+      },
+      "zones": {
+        "title": "Zones",
+        "data": {
+          "zone": "Zone"
+        }
+      },
+      "zone_edit": {
+        "title": "Zone: {zone}",
+        "description": "Instance tags are the names in the Tesira software. Leave the router empty for a zone without source selection. Gate: level block (or sense mute) that lets microphones into the zone; the switch only appears when set. Ducker: tag of the ducker block.",
+        "data": {
+          "name": "Display name",
+          "router": "Source router tag",
+          "level": "Level block tag",
+          "gate": "Microphone gate tag (optional)",
+          "ducker": "Ducker tag (optional)"
+        }
+      },
+      "sources": {
+        "title": "Source lists",
+        "data": {
+          "router": "Source router"
+        }
+      },
+      "sources_edit": {
+        "title": "Sources of {router}",
+        "description": "One source per line as `index=name`. Index 0 means no source. Check the order against the Tesira software.",
+        "data": {
+          "sources_text": "Sources",
+          "prefill": "Read input labels from the device instead (read-only)"
+        }
+      },
+      "levels": {
+        "title": "Volume limits",
+        "description": "The volume slider (0 to 1) maps linearly to this dB range.",
+        "data": {
+          "min_db": "Minimum (dB)",
+          "max_db": "Maximum (dB)"
+        }
+      }
+    },
+    "error": {
+      "required": "Name and level block tag are required.",
+      "invalid_tag": "Tags must not contain quotation marks, backslashes or line breaks.",
+      "invalid_sources": "Use one `index=name` per line, with unique indexes and names.",
+      "prefill_failed": "The device did not return input labels. Enter the list by hand.",
+      "invalid_range": "The minimum must be lower than the maximum."
+    },
+    "abort": {
+      "no_routers": "No zone has a source router."
+    }
+  },
+  "entity": {
+    "switch": {
+      "mic_gate": {
+        "name": "{zone} microphone"
+      },
+      "ducker_bypass": {
+        "name": "{zone} ducker bypass"
+      }
+    },
+    "number": {
+      "ducking_level": {
+        "name": "{zone} ducking level"
+      }
+    }
+  }
+}

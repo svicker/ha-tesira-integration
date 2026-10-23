@@ -2,7 +2,7 @@
 
 Custom Integration (Domain `tesira`) für eine **Biamp Tesira Forté AVB TI**. Sie steuert pro Zone Quellenwahl, Lautstärke und Stumm über das **Tesira Text Protocol (TTP)** per Telnet. Gebaut für das Schützenhaus (Schützenverein Icker e.V.), aber nicht darauf beschränkt: Zonen, Quellen und Grenzen sind in der Oberfläche einstellbar.
 
-> **Status:** Version 2.0.0 ist in Entwicklung. Fertig sind der Protokoll-Client und seine Tests. Die Abschnitte unten beschreiben den Zielzustand. Was davon schon läuft, steht im [CHANGELOG](CHANGELOG.md), sobald es existiert.
+> **Status:** Version 2.0.0. Alle Funktionen sind umgesetzt und mit 50 Tests gegen einen Fake-TTP-Server geprüft. **Gegen die echte Tesira wurde noch nichts getestet.** Was dadurch unbelegt ist, steht im Abschnitt [Unbelegte Annahmen](#unbelegte-annahmen). Änderungen siehe [CHANGELOG](CHANGELOG.md).
 
 ## Funktionen
 
@@ -27,7 +27,7 @@ Es gibt bewusst **keinen** Dienst für freie Befehle.
 ### Per HACS
 
 1. HACS öffnen, Menü oben rechts, **Benutzerdefinierte Repositories**.
-2. Die URL dieses Repositories eintragen, Kategorie **Integration**.
+2. `https://github.com/svicker/ha-tesira-integration` eintragen, Kategorie **Integration**.
 3. „Biamp Tesira“ installieren und Home Assistant neu starten.
 
 ### Manuell
@@ -90,18 +90,29 @@ Die Lautstärke ist linear auf die dB-Grenzen abgebildet: `Lautstärke = (dB −
 
 Unter **Einstellungen → Geräte & Dienste → Biamp Tesira → Konfigurieren**:
 
-- **Zonen:** Anzeigename, Router-Tag, Level-Tag(s), mit oder ohne Quellenwahl
-- **Quellenliste** je Router
+- **Zonen:** Anzeigename, Router-Tag, Level-Tag, Gate-Tag und Ducker-Tag je Zone bearbeiten. Router leer lassen = Zone ohne Quellenwahl. Neue Zonen anlegen oder Zonen löschen geht in dieser Version nicht.
+- **Quellenliste** je Router, eine Zeile pro Quelle als `Index=Name`. Optional lassen sich die Eingangs-Labels des Routers vom Gerät lesen (nur `get`, es wird nichts geschrieben).
 - **Level-Grenzen** in dB
-- **Mikrofon-Gate** je Zone: Instance Tag des Level-Blocks oder Sense-Mutes. Der `switch` erscheint erst, wenn ein Tag eingetragen ist.
+- **Mikrofon-Gate** je Zone: Instance Tag eines Level-Blocks (Kanal 1). Der `switch` erscheint erst, wenn ein Tag eingetragen ist. **An** = Mikrofone werden in die Zone durchgelassen (Block nicht stumm), **Aus** = Block stumm.
+- **Ducker** je Zone: Mit dem Tag erscheinen ein Bypass-`switch` und ein `number` für den Ducking-Pegel. Beide sind standardmäßig deaktiviert und werden erst abgefragt, wenn du sie in Home Assistant aktivierst.
 
 Die Standardwerte entsprechen der Tabelle oben, nach einem Umzug muss also nichts eingegeben werden.
+
+## Unbelegte Annahmen
+
+Folgendes konnte ich ohne Zugriff auf die echte Tesira und die Biamp-Dokumentation nicht belegen. Es steht jeweils an einer Stelle im Code, die sich leicht ändern lässt.
+
+- **Push-Format:** erwartet wird `! "publishToken":"<Label>" "value":<Wert>` (so steht es in den Logs der alten Version). Die alte Integration hat ein anderes Format erwartet.
+- **Ducker:** Attribute `bypass` und `duckingLevel` ohne Kanalindex. Falls die Tesira sie anders adressiert, melden die beiden Entities „unbekannt“ und das Log enthält eine Warnung (`const.py`, `switch.py`, `number.py`).
+- **Eingangs-Labels:** `numInputs` und `inputLabel <n>` für die Vorbefüllung der Quellenliste.
+- **Login:** Benutzer und Passwort werden an die Eingabeaufforderungen `login:` und `password:` gesendet. Das ist nur gegen den Fake-Server getestet.
+- **`SESSION set verbose false`** ist im Client vorgesehen, aber ausgeschaltet.
 
 ## Von der alten Version umziehen
 
 1. **Backup** erstellen (Einstellungen → System → Backups). Optional den Ordner `/config/custom_components/tesira/` sichern.
 2. Den Ordner `/config/custom_components/tesira/` durch den neuen ersetzen.
-3. Home Assistant neu starten. Die bestehende Config Entry wird automatisch migriert und bekommt die Standard-Optionen. Die Entity-Registry wird nicht verändert.
+3. Home Assistant neu starten. Die bestehende Config Entry wird automatisch migriert: Sie bekommt die Standard-Optionen, und ihre Kennung wird von `host:port` auf `host` umgestellt. Die Entity-Registry wird nicht verändert.
 4. Prüfen, ob alle neun Entities mit den alten IDs vorhanden sind und das Dashboard funktioniert.
 5. **Quellenliste prüfen** (siehe oben). Die alte Liste enthielt „Mikrofon“ als Index 1, die neue nicht mehr.
 
@@ -124,7 +135,7 @@ Die Standardwerte entsprechen der Tabelle oben, nach einem Umzug muss also nicht
 ```bash
 uv venv --python 3.13 .venv
 uv pip install --python .venv/bin/python pytest-homeassistant-custom-component ruff mypy
-.venv/bin/python -m pytest
+.venv/bin/python -m pytest --timeout=30
 .venv/bin/ruff check . && .venv/bin/mypy
 ```
 

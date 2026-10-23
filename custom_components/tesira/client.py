@@ -431,8 +431,8 @@ class TesiraClient:
                     await self._send_raw(self._password or "")
                 if await self._expect((BANNER, "login:")) != BANNER:
                     raise TesiraAuthError("Login rejected")
-        else:
-            await self._expect((BANNER,))
+        elif await self._expect((BANNER, "login:")) != BANNER:
+            raise TesiraAuthError("Tesira requires a login")
         self._log("<<", "banner")
 
     async def _send_raw(self, text: str) -> None:
