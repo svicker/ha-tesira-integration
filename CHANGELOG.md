@@ -13,6 +13,7 @@ Neuentwicklung der Integration. Die neun `media_player`-Entities behalten ihre `
 - Optionale Entities: Mikrofon-Gate je Zone (`switch`, nur mit Tag), Ducker-Bypass (`switch`) und Ducking-Pegel (`number`), beide standardmäßig deaktiviert.
 - Diagnose-Download (Host ausgeblendet, letzte Werte, letzte 50 Protokollzeilen).
 - Übersetzungen Deutsch und Englisch.
+- Eigenes Icon im Ordner `brand/` (neutrales Lautsprecher-Symbol, nicht das Biamp-Logo).
 - Lautstärkebefehle werden gedrosselt: der letzte Wert innerhalb von 50 ms gewinnt.
 
 ### Geändert

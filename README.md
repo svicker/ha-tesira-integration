@@ -130,6 +130,10 @@ Folgendes konnte ich ohne Zugriff auf die echte Tesira und die Biamp-Dokumentati
 
 - **Diagnose:** Beim Gerät **Diagnose herunterladen** wählen und die Datei an ein Problem anhängen. Der Host ist darin ausgeblendet.
 
+## Icon
+
+Die Integration bringt ein eigenes Icon im Ordner `custom_components/tesira/brand/` mit (`icon.png`, `icon@2x.png`, `dark_icon.png`, `dark_icon@2x.png`). Home Assistant zeigt es bei den Integrationen und beim Gerät an. Es ist ein neutrales Lautsprecher-Symbol, **nicht** das Biamp- oder Tesira-Logo, weil die Marken geschützt sind und Biamp keinen freien Download anbietet. Wer das offizielle Logo verwenden darf, kopiert es unter denselben Dateinamen in den Ordner (256 × 256 px und 512 × 512 px für `@2x`, bei Bedarf zusätzlich `logo.png` und `dark_logo.png`).
+
 ## Entwicklung
 
 ```bash
