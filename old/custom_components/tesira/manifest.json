@@ -1,0 +1,11 @@
+{
+  "domain": "tesira",
+  "name": "Biamp Tesira",
+  "version": "1.0.0",
+  "documentation": "https://github.com/your-org/ha-tesira",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": [],
+  "iot_class": "local_push",
+  "config_flow": true
+}

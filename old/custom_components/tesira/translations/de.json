@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Biamp Tesira einrichten",
+        "data": {
+          "host": "IP-Adresse / Hostname",
+          "port": "TCP-Port (Standard: 23)",
+          "name": "Name"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum Tesira fehlgeschlagen. IP-Adresse und Port prüfen."
+    },
+    "abort": {
+      "already_configured": "Dieses Gerät ist bereits eingerichtet."
+    }
+  }
+}
