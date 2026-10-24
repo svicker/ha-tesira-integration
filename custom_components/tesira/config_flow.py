@@ -31,10 +31,13 @@ from homeassistant.helpers.selector import (
 
 from .client import TesiraAuthError, TesiraClient, TesiraConnectionError
 from .const import (
+    ATTR_BYPASS,
+    ATTR_MUTE,
     CONFIG_VERSION,
     DEFAULT_NAME,
     DEFAULT_PORT,
     DOMAIN,
+    LEVEL_INDEX,
     OPT_MAX_DB,
     OPT_MIN_DB,
     OPT_SOURCES,
@@ -206,6 +209,8 @@ class TesiraOptionsFlow(OptionsFlow):
                 errors["base"] = "required"
             elif not all(valid_tag(tag) for tag in tags):
                 errors["base"] = "invalid_tag"
+            elif errors := await self._async_check_tags(current, values):
+                pass
             else:
                 zones[self._zone_key] = {
                     "name": values["name"],
@@ -236,6 +241,25 @@ class TesiraOptionsFlow(OptionsFlow):
             description_placeholders={"zone": current["name"]},
             errors=errors,
         )
+
+    async def _async_check_tags(
+        self, current: dict[str, Any], values: dict[str, str]
+    ) -> dict[str, str]:
+        """Read-only check of changed gate/ducker tags against the device.
+
+        Only reads (``get``); nothing is written. Skipped when offline.
+        """
+        runtime = getattr(self.config_entry, "runtime_data", None)
+        if runtime is None:
+            return {}
+        errors: dict[str, str] = {}
+        checks = (("gate", ATTR_MUTE, LEVEL_INDEX), ("ducker", ATTR_BYPASS, None))
+        for field, attribute, index in checks:
+            tag = values[field]
+            if tag and tag != (current.get(field) or ""):
+                if await runtime.async_tag_exists(tag, attribute, index) is False:
+                    errors[field] = "unknown_tag"
+        return errors
 
     # -- sources -------------------------------------------------------
 

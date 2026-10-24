@@ -267,6 +267,26 @@ class TesiraCoordinator:
     # Readers
     # ------------------------------------------------------------------
 
+    def key_rejected(self, key: Key) -> bool:
+        """True if the device refused to read this value (e.g. unknown tag)."""
+        return key in self._failed
+
+    async def async_tag_exists(self, tag: str, attribute: str, index: int | None) -> bool | None:
+        """Read-only check whether the device knows ``tag``.
+
+        Returns None when it cannot be told (offline, other errors); only the
+        device's "address not found" counts as a definite no.
+        """
+        if not self.client.connected:
+            return None
+        try:
+            await self.client.get(tag, attribute, index)
+        except TesiraCommandError as err:
+            return False if "address not found" in str(err).lower() else None
+        except TesiraError:
+            return None
+        return True
+
     def level_db(self, zone: ZoneConfig) -> float | None:
         value = self.values.get(self.level_key(zone))
         return value if isinstance(value, float) else None

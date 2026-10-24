@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.1.0
+
+### Neu
+- **Mikrofon-Gates:** Für jede Zone mit Gate gibt es jetzt standardmäßig einen Schalter `switch.tesira_<zone>_mikrofon` („<Zone> Mikrofon“). An = Mikrofon hörbar (Gate nicht stumm), Aus = Gate stumm, also invertiert zum Tesira-Parameter `mute`. Standardwerte: `MicGateKlub`, `MicGateSaal`, `MicGateKKStand`, `MicGateELATheke`, `MicGateELAAussen`, `MicGateELAAussenSitz`, `MicGateELAToilette`, `MicGateELAFlur`. `ela_saal` hat kein Gate.
+- Das Gate wird beim Start und beim Reconnect nur gelesen und abonniert, nie geschrieben.
+- Options Flow: Geänderte Gate- und Ducker-Tags werden beim Speichern nur lesend gegen die Tesira geprüft. Ein unbekannter Tag wird am Feld gemeldet, es wird nichts geschrieben. Ist die Tesira offline, entfällt die Prüfung.
+- Ein Gate, dessen Tag die Tesira ablehnt, ist `unavailable`. Wird das Tag geleert, verschwindet der Schalter samt Registry-Eintrag.
+
+### Geändert
+- Der Ducker der Zone „ELA Außen Sitzen“ heißt in der Tesira jetzt `DuckerELAAussenSitz` (vorher `DuckerELAAussenSitzen`). Standardwert und gespeicherte Optionen sind umgestellt. Ducker-Bypass und Ducking-Pegel behalten ihre `unique_id`s und `entity_id`s.
+- Der Name des Gate-Schalters ist fest deutsch, damit die Entity-ID nicht von der HA-Sprache abhängt.
+- Config-Entry-Version 3. Die Migration füllt **leere** Gates mit den Standardwerten und benennt den Ducker nur um, wenn dort noch der alte Name steht. Werte, die du selbst gesetzt hast, bleiben. Ein bewusst geleertes Gate wird dabei wieder mit dem Standard gefüllt.
+
+### Intern
+- Fake-Server und Tests um die Gates erweitert (67 Tests).
+
 ## 2.0.2
 
 ### Behoben

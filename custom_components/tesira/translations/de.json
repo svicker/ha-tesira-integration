@@ -54,7 +54,7 @@
       },
       "zone_edit": {
         "title": "Zone: {zone}",
-        "description": "Instance Tags sind die Namen in der Tesira-Software. Router leer lassen für eine Zone ohne Quellenwahl. Gate: Level-Block (oder Sense-Mute), der Mikrofone in die Zone lässt; der Schalter erscheint nur, wenn ein Tag gesetzt ist. Ducker: Tag des Ducker-Blocks.",
+        "description": "Instance Tags sind die Namen in der Tesira-Software. Router leer lassen für eine Zone ohne Quellenwahl. Gate: Level-Block mit Stumm vor dem Sense-Eingang des Duckers. An = Mikrofone sind in der Zone hörbar. Der Schalter erscheint nur, wenn ein Tag gesetzt ist. Ducker: Tag des Ducker-Blocks. Geänderte Gate- und Ducker-Tags werden nur lesend gegen das Gerät geprüft.",
         "data": {
           "name": "Anzeigename",
           "router": "Tag des Quellen-Routers",
@@ -91,7 +91,8 @@
       "invalid_tag": "Tags dürfen keine Anführungszeichen, Backslashes oder Zeilenumbrüche enthalten.",
       "invalid_sources": "Pro Zeile ein `Index=Name`, Indizes und Namen eindeutig.",
       "prefill_failed": "Das Gerät lieferte keine Eingangs-Labels. Liste von Hand eintragen.",
-      "invalid_range": "Das Minimum muss kleiner als das Maximum sein."
+      "invalid_range": "Das Minimum muss kleiner als das Maximum sein.",
+      "unknown_tag": "Auf der Tesira gibt es keinen Block mit diesem Tag."
     },
     "abort": {
       "no_routers": "Keine Zone hat einen Quellen-Router."
@@ -99,9 +100,6 @@
   },
   "entity": {
     "switch": {
-      "mic_gate": {
-        "name": "{zone} Mikrofon"
-      },
       "ducker_bypass": {
         "name": "{zone} Ducker-Bypass"
       }

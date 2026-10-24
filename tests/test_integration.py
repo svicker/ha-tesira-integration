@@ -230,31 +230,104 @@ async def test_unload_closes_connection(hass: HomeAssistant, fake: FakeTesira) -
     assert entry.state is ConfigEntryState.NOT_LOADED
 
 
-async def test_gate_switch_only_with_tag(hass: HomeAssistant, fake: FakeTesira) -> None:
+GATE_TAGS = {
+    "klubraum": "MicGateKlub",
+    "saal": "MicGateSaal",
+    "ela_kk_stand": "MicGateKKStand",
+    "ela_theke": "MicGateELATheke",
+    "ela_aussen": "MicGateELAAussen",
+    "ela_aussen_sitzen": "MicGateELAAussenSitz",
+    "ela_toilette": "MicGateELAToilette",
+    "ela_flur": "MicGateELAFlur",
+}
+
+
+def gate_entity(hass: HomeAssistant, entry_id: str, zone: str) -> str | None:
+    return er.async_get(hass).async_get_entity_id("switch", "tesira", f"{entry_id}_{zone}_mic_gate")
+
+
+async def test_gate_switch_for_every_default_zone_but_ela_saal(
+    hass: HomeAssistant, fake: FakeTesira
+) -> None:
     entry = make_entry(fake)
     await setup_entry(hass, entry)
     registry = er.async_get(hass)
-    assert (
-        registry.async_get_entity_id("switch", "tesira", f"{entry.entry_id}_klubraum_mic_gate")
-        is None
+    for zone in GATE_TAGS:
+        entity_id = gate_entity(hass, entry.entry_id, zone)
+        assert entity_id is not None, zone
+        assert entity_id == f"switch.tesira_{zone}_mikrofon"
+        assert registry.async_get(entity_id).disabled_by is None  # enabled by default
+        assert hass.states.get(entity_id).state == "off"  # gate muted in the fake
+    assert gate_entity(hass, entry.entry_id, "ela_saal") is None
+    assert hass.states.get("switch.tesira_klubraum_mikrofon").attributes["friendly_name"] == (
+        "Tesira Klubraum Mikrofon"
     )
-    await hass.config_entries.async_unload(entry.entry_id)
 
-    options = default_options().to_dict()
-    options["zones"]["klubraum"]["gate"] = "MicGateKlub"
-    hass.config_entries.async_update_entry(entry, options=options)
-    await hass.config_entries.async_setup(entry.entry_id)
-    await wait_for(lambda: entry.runtime_data.connected)
-    await hass.async_block_till_done()
-    entity_id = registry.async_get_entity_id(
-        "switch", "tesira", f"{entry.entry_id}_klubraum_mic_gate"
-    )
-    assert entity_id is not None
-    assert hass.states.get(entity_id).state == "off"  # gate muted = microphones blocked
+
+async def test_gate_switch_writes_mute_inverted(hass: HomeAssistant, fake: FakeTesira) -> None:
+    entry = make_entry(fake)
+    await setup_entry(hass, entry)
+    entity_id = "switch.tesira_klubraum_mikrofon"
     await hass.services.async_call("switch", "turn_on", {"entity_id": entity_id}, blocking=True)
+    assert '"MicGateKlub" set mute 1 false' in fake.received
     assert fake.values[("MicGateKlub", "mute", 1)] is False
-    await hass.async_block_till_done()
     assert hass.states.get(entity_id).state == "on"
+    await hass.services.async_call("switch", "turn_off", {"entity_id": entity_id}, blocking=True)
+    assert '"MicGateKlub" set mute 1 true' in fake.received
+    assert hass.states.get(entity_id).state == "off"
+
+
+async def test_gate_push_from_device_changes_switch(hass: HomeAssistant, fake: FakeTesira) -> None:
+    await setup_entry(hass, make_entry(fake))
+    entity_id = "switch.tesira_saal_mikrofon"
+    assert hass.states.get(entity_id).state == "off"
+    await fake.set_external("MicGateSaal", "mute", False, 1)
+    await wait_for(lambda: hass.states.get(entity_id).state == "on")
+    await fake.set_external("MicGateSaal", "mute", True, 1)
+    await wait_for(lambda: hass.states.get(entity_id).state == "off")
+
+
+async def test_gates_are_only_read_at_start_and_reconnect(
+    hass: HomeAssistant, fake: FakeTesira
+) -> None:
+    fake.values[("MicGateKlub", "mute", 1)] = False  # gate open before HA starts
+    await setup_entry(hass, make_entry(fake))
+    assert hass.states.get("switch.tesira_klubraum_mikrofon").state == "on"
+    assert not [line for line in fake.received if " set " in line]
+    assert '"MicGateKlub" get mute 1' in fake.received
+    assert '"MicGateKlub" subscribe mute 1 "MicGateKlub.mute.1"' in fake.received
+
+    # Connection loss: unavailable. Reconnect: state is read, nothing written.
+    port = fake.port
+    fake.received.clear()
+    await fake.stop()
+    await wait_for(
+        lambda: hass.states.get("switch.tesira_klubraum_mikrofon").state == "unavailable"
+    )
+    fake.values[("MicGateKlub", "mute", 1)] = True  # changed while HA was cut off
+    await fake.start(port)
+    await wait_for(lambda: hass.states.get("switch.tesira_klubraum_mikrofon").state == "off")
+    assert '"MicGateKlub" get mute 1' in fake.received
+    assert not [line for line in fake.received if " set " in line]
+    assert fake.values[("MicGateKlub", "mute", 1)] is True
+
+
+async def test_gate_with_unknown_tag_is_unavailable(hass: HomeAssistant, fake: FakeTesira) -> None:
+    options = default_options().to_dict()
+    options["zones"]["klubraum"]["gate"] = "MicGateGibtEsNicht"
+    entry = make_entry(fake, options)
+    await setup_entry(hass, entry)
+    assert hass.states.get("switch.tesira_klubraum_mikrofon").state == "unavailable"
+    assert hass.states.get("switch.tesira_saal_mikrofon").state == "off"
+
+
+async def test_gate_removed_when_tag_is_cleared(hass: HomeAssistant, fake: FakeTesira) -> None:
+    options = default_options().to_dict()
+    options["zones"]["klubraum"]["gate"] = None
+    entry = make_entry(fake, options)
+    await setup_entry(hass, entry)
+    assert gate_entity(hass, entry.entry_id, "klubraum") is None
+    assert gate_entity(hass, entry.entry_id, "saal") is not None
 
 
 async def test_ducker_entities_disabled_by_default(hass: HomeAssistant, fake: FakeTesira) -> None:
@@ -364,6 +437,9 @@ async def test_everything_is_read_before_anything_is_subscribed(
             assert f'"{zone.level}" subscribe mute 1 "{zone.level}.mute.1"' in received
         for router in routers:
             assert f'"{router}" subscribe sourceSelection "{router}.sourceSelection"' in received
+        for gate in {z.gate for z in options.zones.values() if z.gate}:
+            assert received.count(f'"{gate}" get mute 1') == 1, gate
+            assert f'"{gate}" subscribe mute 1 "{gate}.mute.1"' in received
 
     check(fake.received)
 
@@ -373,7 +449,8 @@ async def test_everything_is_read_before_anything_is_subscribed(
     await wait_for(lambda: hass.states.get(KLUB).state == "unavailable")
     await wait_for(lambda: hass.states.get(KLUB).state == "on" and fake.received)
     routers = {z.router for z in options.zones.values() if z.router}
-    expected = 2 * (len(routers) + 2 * len(options.zones))  # gets + subscribes
+    gates = {z.gate for z in options.zones.values() if z.gate}
+    expected = 2 * (len(routers) + 2 * len(options.zones) + len(gates))  # gets + subscribes
     await wait_for(lambda: len(command_kinds(fake.received)) >= expected)
     check(fake.received)
 

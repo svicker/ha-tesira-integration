@@ -48,15 +48,16 @@ def _fast_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
 async def fake() -> AsyncIterator[FakeTesira]:
     """A Tesira with all default blocks, every router on source 3 (Musik)."""
     server = FakeTesira()
-    for _name, router, level, ducker in const.DEFAULT_ZONES.values():
+    for _name, router, level, gate, ducker in const.DEFAULT_ZONES.values():
         if router:
             server.add(router, "sourceSelection", 3)
         server.add(level, "level", -32.8, 1)
         server.add(level, "mute", False, 1)
+        if gate:
+            server.add(gate, "mute", True, 1)  # microphones blocked
         if ducker:
             server.add(ducker, "bypass", False)
             server.add(ducker, "duckingLevel", -20.0)
-    server.add("MicGateKlub", "mute", True, 1)
     await server.start()
     yield server
     await server.stop()
@@ -65,7 +66,7 @@ async def fake() -> AsyncIterator[FakeTesira]:
 def make_entry(
     fake: FakeTesira, options: dict[str, Any] | None = None, **kwargs: Any
 ) -> MockConfigEntry:
-    kwargs.setdefault("version", 2)
+    kwargs.setdefault("version", 3)
     kwargs.setdefault("unique_id", "127.0.0.1")
     return MockConfigEntry(
         domain=DOMAIN,

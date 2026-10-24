@@ -2,7 +2,7 @@
 
 Custom Integration (Domain `tesira`) für eine **Biamp Tesira Forté AVB TI**. Sie steuert pro Zone Quellenwahl, Lautstärke und Stumm über das **Tesira Text Protocol (TTP)** per Telnet. Gebaut für das Schützenhaus (Schützenverein Icker e.V.), aber nicht darauf beschränkt: Zonen, Quellen und Grenzen sind in der Oberfläche einstellbar.
 
-> **Status:** Version 2.0.2. Alle Funktionen sind umgesetzt und mit 58 Tests gegen einen Fake-TTP-Server geprüft. **Gegen die echte Tesira wurde noch nichts getestet.** Was dadurch unbelegt ist, steht im Abschnitt [Unbelegte Annahmen](#unbelegte-annahmen). Änderungen siehe [CHANGELOG](CHANGELOG.md).
+> **Status:** Version 2.1.0. Alle Funktionen sind umgesetzt und mit 67 Tests gegen einen Fake-TTP-Server geprüft. **Gegen die echte Tesira wurde noch nichts getestet.** Was dadurch unbelegt ist, steht im Abschnitt [Unbelegte Annahmen](#unbelegte-annahmen). Änderungen siehe [CHANGELOG](CHANGELOG.md).
 
 ## Funktionen
 
@@ -62,17 +62,26 @@ Meldet die Tesira einen Index, der nicht in der Liste steht, zeigt die Entity ke
 
 Alle Entities gehören zu **einem** Gerät „Tesira“ (Hersteller Biamp, Modell Tesira Forté AVB TI).
 
-| Entity | Router | Level | Quellenwahl |
-|---|---|---|---|
-| `media_player.tesira_klubraum` | `SourceRouterKlubRaum` | `LevelKlubRaum` | ja |
-| `media_player.tesira_saal` | `SourceRouterSaal` | `LevelSaal` | ja |
-| `media_player.tesira_ela_saal` | – | `LevelELASaal` | nein |
-| `media_player.tesira_ela_kk_stand` | `SourceRouterKKStand` | `LevelELAKKStand` | ja |
-| `media_player.tesira_ela_theke` | `SourceRouterTheke` | `LevelELATheke` | ja |
-| `media_player.tesira_ela_aussen` | `SourceRouterAussen` | `LevelELAAussen` | ja |
-| `media_player.tesira_ela_aussen_sitzen` | `SourceRouterAussen` | `LevelELAAussenSitzen` | ja |
-| `media_player.tesira_ela_toilette` | `SourceRouterToiletteFlur` | `LevelELAToilette` | ja |
-| `media_player.tesira_ela_flur` | `SourceRouterToiletteFlur` | `LevelELAFlur` | ja |
+| Entity | Router | Level | Quellenwahl | Mikrofon-Gate (`switch`) | Ducker |
+|---|---|---|---|---|---|
+| `media_player.tesira_klubraum` | `SourceRouterKlubRaum` | `LevelKlubRaum` | ja | `MicGateKlub` | `DuckerKlubRaum` |
+| `media_player.tesira_saal` | `SourceRouterSaal` | `LevelSaal` | ja | `MicGateSaal` | `DuckerSaal` |
+| `media_player.tesira_ela_saal` | – | `LevelELASaal` | nein | – | – |
+| `media_player.tesira_ela_kk_stand` | `SourceRouterKKStand` | `LevelELAKKStand` | ja | `MicGateKKStand` | `DuckerELAKKStand` |
+| `media_player.tesira_ela_theke` | `SourceRouterTheke` | `LevelELATheke` | ja | `MicGateELATheke` | `DuckerELATheke` |
+| `media_player.tesira_ela_aussen` | `SourceRouterAussen` | `LevelELAAussen` | ja | `MicGateELAAussen` | `DuckerELAAussen` |
+| `media_player.tesira_ela_aussen_sitzen` | `SourceRouterAussen` | `LevelELAAussenSitzen` | ja | `MicGateELAAussenSitz` | `DuckerELAAussenSitz` |
+| `media_player.tesira_ela_toilette` | `SourceRouterToiletteFlur` | `LevelELAToilette` | ja | `MicGateELAToilette` | `DuckerELAToilette` |
+| `media_player.tesira_ela_flur` | `SourceRouterToiletteFlur` | `LevelELAFlur` | ja | `MicGateELAFlur` | `DuckerELAFlur` |
+
+### Mikrofon-Gate
+
+Für jede Zone mit Gate-Tag gibt es einen Schalter `switch.tesira_<zone>_mikrofon` (Name „<Zone> Mikrofon“, immer deutsch, damit die Entity-ID nicht von der Sprache abhängt). Das Gate ist ein Level-Block mit Stumm vor dem Sense-Eingang des Duckers.
+
+- **An** = Mikrofon ist in der Zone hörbar (Gate **nicht** stumm), **Aus** = Gate stumm. Der Schalter ist also gegenüber dem Tesira-Parameter `mute` invertiert.
+- Beim Start und nach jedem Reconnect wird der Zustand **nur gelesen**. Die Integration ändert nie von sich aus ein Gate. Geschrieben wird nur, wenn du den Schalter bedienst.
+- Der Schalter ist `unavailable`, solange die Verbindung fehlt oder die Tesira das Tag nicht kennt.
+- Wird das Tag in den Optionen geleert, verschwindet der Schalter.
 
 Geteilte Router (Außen/Außen Sitzen, Toilette/Flur): Wird bei einer Zone die Quelle gewählt, ändert sich der Router für beide. Beide Entities zeigen dieselbe Quelle.
 
@@ -93,7 +102,7 @@ Unter **Einstellungen → Geräte & Dienste → Biamp Tesira → Konfigurieren**
 - **Zonen:** Anzeigename, Router-Tag, Level-Tag, Gate-Tag und Ducker-Tag je Zone bearbeiten. Router leer lassen = Zone ohne Quellenwahl. Neue Zonen anlegen oder Zonen löschen geht in dieser Version nicht.
 - **Quellenliste** je Router, eine Zeile pro Quelle als `Index=Name`. Optional lassen sich die Eingangs-Labels des Routers vom Gerät lesen (nur `get`, es wird nichts geschrieben).
 - **Level-Grenzen** in dB
-- **Mikrofon-Gate** je Zone: Instance Tag eines Level-Blocks (Kanal 1). Der `switch` erscheint erst, wenn ein Tag eingetragen ist. **An** = Mikrofone werden in die Zone durchgelassen (Block nicht stumm), **Aus** = Block stumm.
+- **Mikrofon-Gate** je Zone: Instance Tag eines Level-Blocks (Kanal 1), siehe oben. Der `switch` erscheint nur, wenn ein Tag eingetragen ist. Gate- und Ducker-Tags, die du änderst, werden beim Speichern **nur lesend** gegen die Tesira geprüft (`get mute 1` bzw. `get bypass`). Kennt die Tesira den Tag nicht, erscheint ein Fehler am Feld und nichts wird gespeichert. Ist die Tesira offline, wird nicht geprüft.
 - **Ducker** je Zone: Mit dem Tag erscheinen ein Bypass-`switch` und ein `number` für den Ducking-Pegel. Beide sind standardmäßig deaktiviert und werden erst abgefragt, wenn du sie in Home Assistant aktivierst.
 
 Die Standardwerte entsprechen der Tabelle oben, nach einem Umzug muss also nichts eingegeben werden.

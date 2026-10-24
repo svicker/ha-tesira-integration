@@ -6,10 +6,11 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import TesiraConfigEntry
-from .const import ATTR_BYPASS
+from .const import ATTR_BYPASS, DOMAIN
 from .coordinator import Key, TesiraCoordinator
 from .entity import TesiraEntity
 from .options import ZoneConfig
@@ -21,10 +22,16 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: TesiraConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data
+    registry = er.async_get(hass)
     entities: list[TesiraEntity] = []
     for zone in coordinator.options.zones.values():
         if zone.gate:
             entities.append(MicGateSwitch(coordinator, zone))
+        elif stale := registry.async_get_entity_id(
+            "switch", DOMAIN, f"{entry.entry_id}_{zone.key}_mic_gate"
+        ):
+            # Gate tag was cleared: drop the switch instead of leaving a dead one.
+            registry.async_remove(stale)
         if zone.ducker:
             entities.append(DuckerBypassSwitch(coordinator, zone))
     async_add_entities(entities)
@@ -36,7 +43,6 @@ class MicGateSwitch(TesiraEntity, SwitchEntity):
     Exists only when a gate tag is set for the zone in the options.
     """
 
-    _attr_translation_key = "mic_gate"
     _attr_icon = "mdi:microphone"
 
     def __init__(self, coordinator: TesiraCoordinator, zone: ZoneConfig) -> None:
@@ -44,7 +50,14 @@ class MicGateSwitch(TesiraEntity, SwitchEntity):
         super().__init__(coordinator, {zone.gate})
         self._key = coordinator.gate_key(zone)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{zone.key}_mic_gate"
-        self._attr_translation_placeholders = {"zone": zone.name}
+        # Fixed name (not translated), so the entity_id does not depend on the
+        # language: switch.tesira_<zone>_mikrofon
+        self._attr_name = f"{zone.name} Mikrofon"
+
+    @property
+    def available(self) -> bool:
+        # A tag the device rejects stays unavailable instead of "unknown".
+        return super().available and not self.coordinator.key_rejected(self._key)
 
     @property
     def is_on(self) -> bool | None:

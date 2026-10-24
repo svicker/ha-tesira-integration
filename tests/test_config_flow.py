@@ -10,6 +10,7 @@ from homeassistant.helpers import entity_registry as er
 
 from custom_components.tesira.const import DOMAIN
 from custom_components.tesira.diagnostics import async_get_config_entry_diagnostics
+from custom_components.tesira.options import default_options
 
 from .conftest import make_entry, setup_entry, wait_for
 from .fake_tesira import FakeTesira
@@ -35,7 +36,7 @@ async def test_user_flow_creates_entry(hass: HomeAssistant, fake: FakeTesira) ->
     assert result["data"]["host"] == "127.0.0.1"
     entry = result["result"]
     assert entry.unique_id == "127.0.0.1"
-    assert entry.version == 2
+    assert entry.version == 3
     await wait_for(lambda: hass.states.get(KLUB) and hass.states.get(KLUB).state == "on")
 
 
@@ -202,40 +203,95 @@ async def test_options_flow_prefill_reads_labels_only(
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
-async def test_options_flow_zone_gate_and_validation(hass: HomeAssistant, fake: FakeTesira) -> None:
+async def edit_zone(hass: HomeAssistant, entry_id: str, zone: str) -> str:
+    result = await hass.config_entries.options.async_init(entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "zones"}
+    )
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"zone": zone})
+    assert result["step_id"] == "zone_edit"
+    return result["flow_id"]
+
+
+BASE = {
+    "name": "Klubraum",
+    "router": "SourceRouterKlubRaum",
+    "level": "LevelKlubRaum",
+    "gate": "MicGateKlub",
+    "ducker": "DuckerKlubRaum",
+}
+
+
+async def test_options_flow_validates_tags_and_clears_gate(
+    hass: HomeAssistant, fake: FakeTesira
+) -> None:
     entry = make_entry(fake)
     await setup_entry(hass, entry)
     registry = er.async_get(hass)
     unique_id = f"{entry.entry_id}_klubraum_mic_gate"
-    assert registry.async_get_entity_id("switch", DOMAIN, unique_id) is None
+    assert registry.async_get_entity_id("switch", DOMAIN, unique_id) is not None
+    flow_id = await edit_zone(hass, entry.entry_id, "klubraum")
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"next_step_id": "zones"}
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"zone": "klubraum"}
-    )
-    assert result["step_id"] == "zone_edit"
-    base = {"name": "Klubraum", "router": "SourceRouterKlubRaum", "level": "LevelKlubRaum"}
-    bad = await hass.config_entries.options.async_configure(
-        result["flow_id"], {**base, "gate": 'Bad"Tag'}
-    )
+    bad = await hass.config_entries.options.async_configure(flow_id, {**BASE, "gate": 'Bad"Tag'})
     assert bad["errors"] == {"base": "invalid_tag"}
-    missing = await hass.config_entries.options.async_configure(
-        result["flow_id"], {**base, "level": ""}
-    )
+    missing = await hass.config_entries.options.async_configure(flow_id, {**BASE, "level": ""})
     assert missing["errors"] == {"base": "required"}
+
+    # Unknown tags are reported at the field, and nothing is written.
+    fake.received.clear()
+    unknown_gate = await hass.config_entries.options.async_configure(
+        flow_id, {**BASE, "gate": "MicGateGibtEsNicht"}
+    )
+    assert unknown_gate["errors"] == {"gate": "unknown_tag"}
+    unknown_ducker = await hass.config_entries.options.async_configure(
+        flow_id, {**BASE, "ducker": "DuckerGibtEsNicht"}
+    )
+    assert unknown_ducker["errors"] == {"ducker": "unknown_tag"}
+    assert '"MicGateGibtEsNicht" get mute 1' in fake.received
+    assert '"DuckerGibtEsNicht" get bypass' in fake.received
+    assert not [line for line in fake.received if " set " in line]
+    assert not entry.options  # nothing was saved by the failed attempts
+
+    # Leaving the gate empty removes the switch.
     done = await hass.config_entries.options.async_configure(
-        result["flow_id"], {**base, "gate": "MicGateKlub"}
+        flow_id, {k: v for k, v in BASE.items() if k != "gate"}
     )
     assert done["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["zones"]["klubraum"]["gate"] is None
     await hass.async_block_till_done()
     await wait_for(lambda: entry.runtime_data.connected)
     await hass.async_block_till_done()
-    assert registry.async_get_entity_id("switch", DOMAIN, unique_id) is not None
+    assert registry.async_get_entity_id("switch", DOMAIN, unique_id) is None
     # The unique_id of the media player itself did not change.
     assert registry.async_get(KLUB).unique_id == f"{entry.entry_id}_klubraum"
+
+
+async def test_options_flow_unchanged_tags_are_not_rechecked(
+    hass: HomeAssistant, fake: FakeTesira
+) -> None:
+    options = default_options().to_dict()
+    options["zones"]["klubraum"]["gate"] = "MicGateGibtEsNicht"  # already saved earlier
+    entry = make_entry(fake, options)
+    await setup_entry(hass, entry)
+    flow_id = await edit_zone(hass, entry.entry_id, "klubraum")
+    fake.received.clear()
+    done = await hass.config_entries.options.async_configure(
+        flow_id, {**BASE, "name": "Klub", "gate": "MicGateGibtEsNicht"}
+    )
+    assert done["type"] is FlowResultType.CREATE_ENTRY
+    assert '"MicGateGibtEsNicht" get mute 1' not in fake.received
+
+
+async def test_options_flow_offline_skips_tag_check(hass: HomeAssistant, fake: FakeTesira) -> None:
+    entry = make_entry(fake)
+    await setup_entry(hass, entry)
+    flow_id = await edit_zone(hass, entry.entry_id, "klubraum")
+    await fake.stop()
+    await wait_for(lambda: not entry.runtime_data.connected)
+    done = await hass.config_entries.options.async_configure(
+        flow_id, {**BASE, "gate": "MicGateIrgendwas"}
+    )
+    assert done["type"] is FlowResultType.CREATE_ENTRY
 
 
 async def test_options_flow_level_limits(hass: HomeAssistant, fake: FakeTesira) -> None:

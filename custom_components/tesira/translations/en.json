@@ -54,7 +54,7 @@
       },
       "zone_edit": {
         "title": "Zone: {zone}",
-        "description": "Instance tags are the names in the Tesira software. Leave the router empty for a zone without source selection. Gate: level block (or sense mute) that lets microphones into the zone; the switch only appears when set. Ducker: tag of the ducker block.",
+        "description": "Instance tags are the names in the Tesira software. Leave the router empty for a zone without source selection. Gate: level block with mute in front of the ducker's sense input. On = microphones are audible in the zone. The switch only appears when a tag is set. Ducker: tag of the ducker block. Changed gate and ducker tags are checked read-only against the device.",
         "data": {
           "name": "Display name",
           "router": "Source router tag",
@@ -91,7 +91,8 @@
       "invalid_tag": "Tags must not contain quotation marks, backslashes or line breaks.",
       "invalid_sources": "Use one `index=name` per line, with unique indexes and names.",
       "prefill_failed": "The device did not return input labels. Enter the list by hand.",
-      "invalid_range": "The minimum must be lower than the maximum."
+      "invalid_range": "The minimum must be lower than the maximum.",
+      "unknown_tag": "The Tesira has no block with this tag."
     },
     "abort": {
       "no_routers": "No zone has a source router."
@@ -99,9 +100,6 @@
   },
   "entity": {
     "switch": {
-      "mic_gate": {
-        "name": "{zone} microphone"
-      },
       "ducker_bypass": {
         "name": "{zone} ducker bypass"
       }

@@ -72,8 +72,8 @@ class TesiraOptions:
 def default_options() -> TesiraOptions:
     """Defaults = the tables of the original Schützenhaus setup."""
     zones = {
-        key: ZoneConfig(key, name, router, level, None, ducker)
-        for key, (name, router, level, ducker) in DEFAULT_ZONES.items()
+        key: ZoneConfig(key, name, router, level, gate, ducker)
+        for key, (name, router, level, gate, ducker) in DEFAULT_ZONES.items()
     }
     return parse_options({}, zones_default=zones)
 
