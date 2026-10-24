@@ -43,6 +43,9 @@ class FakeTesira:
         self.username = username
         self.password = password
         self.swallow_next = 0  # number of commands to ignore (timeout tests)
+        # Values that change right before a subscribe is handled, i.e. after
+        # the client has already read them with get.
+        self.change_before_subscribe: dict[Key, Any] = {}
         self.reject_login = False
         self._server: asyncio.Server | None = None
         self._writers: set[asyncio.StreamWriter] = set()
@@ -96,6 +99,10 @@ class FakeTesira:
     # -- connection handling -------------------------------------------
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        if self._server is None:
+            # Accepted just while stopping: refuse, or wait_closed() would hang.
+            writer.transport.abort()
+            return
         self._writers.add(writer)
         try:
             writer.write(bytes([IAC, DO, 1, IAC, WILL, 3, IAC, DO, 31]))
@@ -182,6 +189,8 @@ class FakeTesira:
                 await self._publish(key)
                 return
         elif verb == "subscribe":
+            if key in self.change_before_subscribe:
+                self.values[key] = self.change_before_subscribe.pop(key)
             label = rest.strip('"')
             self._subs[(writer, key)] = label
             writer.write(b"+OK\r\n")

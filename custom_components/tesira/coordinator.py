@@ -201,22 +201,34 @@ class TesiraCoordinator:
         return remove
 
     async def _async_sync_all(self) -> None:
-        """Runs on every (re)connect: subscribe and read everything."""
-        _LOGGER.debug("Synchronising %d values", len(self._watches))
-        for key in sorted(self._watches, key=key_label):
-            await self._async_sync_key(key)
+        """Runs on every (re)connect, before the entities become available.
+
+        1. Forget everything: nothing from the previous connection may be shown.
+        2. Read every value (routers, levels, mutes, ...).
+        3. Only then subscribe, so later changes arrive as pushes.
+        """
+        keys = sorted(self._watches, key=key_label)
+        _LOGGER.debug("Synchronising %d values", len(keys))
+        self.values.clear()
+        for key in keys:
+            await self._async_read_key(key)
+        for key in keys:
+            if key in self.values:
+                await self._async_subscribe_key(key)
 
     async def _async_sync_key_safe(self, key: Key) -> None:
+        """Read and subscribe a single value (for watches added at runtime)."""
         try:
-            await self._async_sync_key(key)
+            await self._async_read_key(key)
+            if key in self.values:
+                await self._async_subscribe_key(key)
         except TesiraError as err:
             _LOGGER.debug("Sync of %s failed: %s", key_label(key), err)
 
-    async def _async_sync_key(self, key: Key) -> None:
+    async def _async_read_key(self, key: Key) -> None:
         tag, attribute, index = key
         try:
-            await self.client.subscribe(tag, attribute, key_label(key), index)
-            self.values[key] = coerce(attribute, await self.client.get(tag, attribute, index))
+            value = coerce(attribute, await self.client.get(tag, attribute, index))
         except TesiraCommandError as err:
             # Wrong tag or attribute: log once, keep going with the rest.
             if key not in self._failed:
@@ -225,7 +237,18 @@ class TesiraCoordinator:
             self.values.pop(key, None)
         else:
             self._failed.discard(key)
+            if value is None:
+                self.values.pop(key, None)
+            else:
+                self.values[key] = value
         self._notify({tag})
+
+    async def _async_subscribe_key(self, key: Key) -> None:
+        tag, attribute, index = key
+        try:
+            await self.client.subscribe(tag, attribute, key_label(key), index)
+        except TesiraCommandError as err:
+            _LOGGER.warning("Tesira rejected subscription %s: %s", key_label(key), err)
 
     @callback
     def _on_state(self, connected: bool) -> None:
@@ -323,7 +346,10 @@ class TesiraCoordinator:
                 except TesiraError as err:
                     _LOGGER.warning("Setting level of %s failed: %s", zone.level, err)
                     self._level_targets.pop(zone.level, None)
-                    await self._async_sync_key_safe(key)
+                    try:
+                        await self._async_read_key(key)
+                    except TesiraError as read_err:
+                        _LOGGER.debug("Re-read of %s failed: %s", zone.level, read_err)
         finally:
             self._level_tasks.pop(zone.level, None)
 

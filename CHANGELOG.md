@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.1
+
+### Geändert
+- Beim Verbinden werden jetzt zuerst alle Werte gelesen (`get sourceSelection` je Router, `get level 1` und `get mute 1` je Level-Block) und erst danach die Subscriptions angelegt. Vorher wurde pro Wert abwechselnd abonniert und gelesen.
+- Die Entities werden erst verfügbar, wenn das abgeschlossen ist. Werte der vorigen Verbindung werden vorher verworfen, nach einem Reconnect erscheint also nie die alte Quelle.
+- Ein Router ohne Wert vom Gerät zeigt keine Quelle an (nie „Aus“).
+
+### Intern
+- Tests: Router steht beim Verbinden schon auf einer Quelle, Reihenfolge der Befehle, Reconnect, Änderung zwischen `get` und `subscribe`. Eine Race im Fake-Server beim Stoppen ist behoben.
+
 ## 2.0.0
 
 Neuentwicklung der Integration. Die neun `media_player`-Entities behalten ihre `unique_id`s und `entity_id`s.

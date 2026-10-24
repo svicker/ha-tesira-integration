@@ -7,9 +7,10 @@ import logging
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.event import async_track_state_change_event
 
 from custom_components.tesira.const import DEFAULT_ZONES
 from custom_components.tesira.options import default_options
@@ -298,3 +299,131 @@ async def test_enabled_ducker_entities_read_and_write(
     assert fake.values[("DuckerKlubRaum", "duckingLevel", None)] == -12.5
     await fake.set_external("DuckerKlubRaum", "bypass", False)
     await wait_for(lambda: hass.states.get(switch.entity_id).state == "off")
+
+
+def record_states(hass: HomeAssistant, entity_id: str) -> list[tuple[str, object]]:
+    """Every (state, source) the entity ever had, in order."""
+    history: list[tuple[str, object]] = []
+
+    @callback
+    def _on_change(event: Event[EventStateChangedData]) -> None:
+        new = event.data["new_state"]
+        if new is not None:
+            history.append((new.state, new.attributes.get("source")))
+
+    async_track_state_change_event(hass, [entity_id], _on_change)
+    return history
+
+
+def command_kinds(received: list[str]) -> list[str]:
+    return [
+        "get" if " get " in line else "subscribe"
+        for line in received
+        if " get " in line or " subscribe " in line
+    ]
+
+
+async def test_router_already_on_4_is_never_shown_as_off(
+    hass: HomeAssistant, fake: FakeTesira
+) -> None:
+    fake.values[("SourceRouterKlubRaum", "sourceSelection", None)] = 4
+    entry = make_entry(fake)
+    entry.add_to_hass(hass)
+    history = record_states(hass, KLUB)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await wait_for(lambda: entry.runtime_data.connected)
+    await hass.async_block_till_done()
+
+    assert attr(hass, KLUB, "source") == "PC Theke"
+    available = [h for h in history if h[0] != "unavailable"]
+    # The first state the entity ever has while available already shows the
+    # real source; "Aus" (index 0) and "no value" never appear.
+    assert available[0] == ("on", "PC Theke")
+    assert all(source == "PC Theke" for _state, source in available)
+
+
+async def test_everything_is_read_before_anything_is_subscribed(
+    hass: HomeAssistant, fake: FakeTesira
+) -> None:
+    entry = make_entry(fake)
+    await setup_entry(hass, entry)
+    options = entry.runtime_data.options
+
+    def check(received: list[str]) -> None:
+        kinds = command_kinds(received)
+        assert "get" in kinds and "subscribe" in kinds
+        assert kinds.index("subscribe") == kinds.count("get"), kinds
+        assert "subscribe" not in kinds[: kinds.count("get")]
+        routers = {z.router for z in options.zones.values() if z.router}
+        for router in routers:
+            assert received.count(f'"{router}" get sourceSelection') == 1, router
+        for zone in options.zones.values():
+            assert received.count(f'"{zone.level}" get level 1') == 1, zone.level
+            assert received.count(f'"{zone.level}" get mute 1') == 1, zone.level
+            assert f'"{zone.level}" subscribe level 1 "{zone.level}.level.1"' in received
+            assert f'"{zone.level}" subscribe mute 1 "{zone.level}.mute.1"' in received
+        for router in routers:
+            assert f'"{router}" subscribe sourceSelection "{router}.sourceSelection"' in received
+
+    check(fake.received)
+
+    # Same again after a reconnect.
+    fake.received.clear()
+    await fake.drop_connections()
+    await wait_for(lambda: hass.states.get(KLUB).state == "unavailable")
+    await wait_for(lambda: hass.states.get(KLUB).state == "on" and fake.received)
+    routers = {z.router for z in options.zones.values() if z.router}
+    expected = 2 * (len(routers) + 2 * len(options.zones))  # gets + subscribes
+    await wait_for(lambda: len(command_kinds(fake.received)) >= expected)
+    check(fake.received)
+
+
+async def test_reconnect_never_shows_the_stale_source(
+    hass: HomeAssistant, fake: FakeTesira
+) -> None:
+    await setup_entry(hass, make_entry(fake))
+    assert attr(hass, KLUB, "source") == "Musik"
+    history = record_states(hass, KLUB)
+    port = fake.port
+    await fake.stop()
+    await wait_for(lambda: hass.states.get(KLUB).state == "unavailable")
+    fake.values[("SourceRouterKlubRaum", "sourceSelection", None)] = 4
+    await fake.start(port)
+    await wait_for(lambda: hass.states.get(KLUB).state == "on")
+    after_outage = history[[h[0] for h in history].index("unavailable") :]
+    available = [h for h in after_outage if h[0] != "unavailable"]
+    assert available[0] == ("on", "PC Theke")
+    assert ("on", "Musik") not in available
+
+
+async def test_value_changing_after_subscribe_arrives(
+    hass: HomeAssistant, fake: FakeTesira
+) -> None:
+    entry = make_entry(fake)
+    await setup_entry(hass, entry)
+    await fake.set_external("SourceRouterKlubRaum", "sourceSelection", 2)
+    await wait_for(lambda: attr(hass, KLUB, "source") == "SAT TV")
+    await fake.set_external("LevelKlubRaum", "level", -50.0, 1)
+    await wait_for(lambda: attr(hass, KLUB, "volume_level") == pytest.approx(50 / 112))
+
+
+async def test_value_changing_between_get_and_subscribe_is_not_lost(
+    hass: HomeAssistant, fake: FakeTesira
+) -> None:
+    fake.values[("SourceRouterKlubRaum", "sourceSelection", None)] = 4
+    # Changes after the client has read 4, right before it subscribes.
+    fake.change_before_subscribe[("SourceRouterKlubRaum", "sourceSelection", None)] = 1
+    await setup_entry(hass, make_entry(fake))
+    await wait_for(lambda: attr(hass, KLUB, "source") == "Apple TV")
+
+
+async def test_router_without_value_has_no_source(
+    hass: HomeAssistant, fake: FakeTesira, caplog: pytest.LogCaptureFixture
+) -> None:
+    options = default_options().to_dict()
+    options["zones"]["klubraum"]["router"] = "RouterDoesNotExist"
+    await setup_entry(hass, make_entry(fake, options))
+    # No value from the device: no source at all, never "Aus".
+    assert attr(hass, KLUB, "source") is None
+    assert hass.states.get(KLUB).state == "on"
+    assert any("RouterDoesNotExist" in r.message for r in caplog.records)
