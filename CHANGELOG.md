@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.2
+
+### Behoben
+- Steuerzeichen in empfangenen Zeilen (zum Beispiel ein Backspace mitten im Tag einer Echo-Zeile) werden sofort beim Einlesen entfernt. Dadurch passen Tags und Labels immer, und das Protokoll-Log (Diagnose) enthält nur lesbaren Text.
+
+### Intern
+- Der Fake-Server kann Steuerzeichen in Echo-Zeilen und Pushes einstreuen. Neue Tests dafür (58 insgesamt).
+
 ## 2.0.1
 
 ### Geändert

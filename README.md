@@ -2,7 +2,7 @@
 
 Custom Integration (Domain `tesira`) für eine **Biamp Tesira Forté AVB TI**. Sie steuert pro Zone Quellenwahl, Lautstärke und Stumm über das **Tesira Text Protocol (TTP)** per Telnet. Gebaut für das Schützenhaus (Schützenverein Icker e.V.), aber nicht darauf beschränkt: Zonen, Quellen und Grenzen sind in der Oberfläche einstellbar.
 
-> **Status:** Version 2.0.1. Alle Funktionen sind umgesetzt und mit 56 Tests gegen einen Fake-TTP-Server geprüft. **Gegen die echte Tesira wurde noch nichts getestet.** Was dadurch unbelegt ist, steht im Abschnitt [Unbelegte Annahmen](#unbelegte-annahmen). Änderungen siehe [CHANGELOG](CHANGELOG.md).
+> **Status:** Version 2.0.2. Alle Funktionen sind umgesetzt und mit 58 Tests gegen einen Fake-TTP-Server geprüft. **Gegen die echte Tesira wurde noch nichts getestet.** Was dadurch unbelegt ist, steht im Abschnitt [Unbelegte Annahmen](#unbelegte-annahmen). Änderungen siehe [CHANGELOG](CHANGELOG.md).
 
 ## Funktionen
 
