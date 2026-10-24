@@ -16,6 +16,7 @@ from custom_components.tesira.client import (
     TesiraConnectionError,
     TesiraTimeoutError,
     parse_value,
+    strip_control,
 )
 
 from .fake_tesira import FakeTesira
@@ -228,3 +229,34 @@ async def test_invalid_identifiers_rejected(client: TesiraClient) -> None:
         await client.get('Bad"Tag', "level", 1)
     with pytest.raises(ValueError):
         await client.get("Tag", "level; drop", 1)
+
+
+def test_strip_control_keeps_text_and_newlines() -> None:
+    assert (
+        strip_control(b"SourceRouterSaal.s\x08ourceSelection\r\n")
+        == b"SourceRouterSaal.sourceSelection\n"
+    )
+    assert strip_control(b"a\x00b\x07c\x1bd\x7fe\tf") == b"abcdef"
+    assert strip_control("Außen".encode()) == "Außen".encode()
+
+
+async def test_control_characters_in_echo_and_push_are_ignored(
+    server: FakeTesira,
+) -> None:
+    server.control_chars = True
+    pushes: list[tuple[str, Any]] = []
+    c = make_client(server)
+    c.set_callbacks(on_push=lambda label, value: pushes.append((label, value)))
+    c.start()
+    await wait_until(lambda: c.connected)
+    try:
+        assert await c.get("SourceRouterKlubRaum", "sourceSelection") == 4
+        await c.subscribe(
+            "SourceRouterKlubRaum", "sourceSelection", "SourceRouterKlubRaum.sourceSelection"
+        )
+        await server.set_external("SourceRouterKlubRaum", "sourceSelection", 2)
+        await wait_until(lambda: ("SourceRouterKlubRaum.sourceSelection", 2) in pushes)
+        for line in c.protocol_log:
+            assert all(ch == "\n" or (ch >= " " and ch != "\x7f") for ch in line), repr(line)
+    finally:
+        await c.stop()

@@ -46,6 +46,8 @@ class FakeTesira:
         # Values that change right before a subscribe is handled, i.e. after
         # the client has already read them with get.
         self.change_before_subscribe: dict[Key, Any] = {}
+        # Sprinkle control characters into echo lines and pushes.
+        self.control_chars = False
         self.reject_login = False
         self._server: asyncio.Server | None = None
         self._writers: set[asyncio.StreamWriter] = set()
@@ -93,6 +95,10 @@ class FakeTesira:
         for (writer, sub_key), label in list(self._subs.items()):
             if sub_key == key and not writer.is_closing():
                 value = fmt(self.values[key])
+                if self.control_chars:
+                    middle = len(label) // 2
+                    label = f"{label[:middle]}\x08{label[middle:]}"
+                    value = f"\x00{value}"
                 writer.write(f'! "publishToken":"{label}" "value":{value}\r\n'.encode())
                 await writer.drain()
 
@@ -146,7 +152,11 @@ class FakeTesira:
         if self.swallow_next > 0:
             self.swallow_next -= 1
             return
-        writer.write(line.encode() + b"\r\n")  # echo
+        echo = line.encode()
+        if self.control_chars:
+            middle = len(echo) // 2
+            echo = echo[:middle] + b"\x08" + echo[middle:]
+        writer.write(echo + b"\r\n")  # echo
         if line.startswith("SESSION set verbose"):
             writer.write(b"+OK\r\n")
             await writer.drain()

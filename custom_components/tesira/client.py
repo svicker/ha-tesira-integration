@@ -109,6 +109,17 @@ class IacFilter:
         return bytes(out)
 
 
+# Everything below 0x20 except the line feed, plus DEL. Echo lines can contain
+# stray control characters (e.g. a backspace inside a tag), which would break
+# matching of tags and labels.
+_CONTROL_BYTES = bytes(b for b in range(0x20) if b != 0x0A) + b"\x7f"
+
+
+def strip_control(data: bytes) -> bytes:
+    """Remove control characters (but keep ``\\n`` as the line separator)."""
+    return data.translate(None, _CONTROL_BYTES)
+
+
 def parse_value(raw: str) -> Any:
     """Convert a TTP value string to bool, int, float or str.
 
@@ -463,7 +474,7 @@ class TesiraClient:
         chunk = await self._reader.read(1024)
         if not chunk:
             raise TesiraConnectionError("Connection closed by Tesira")
-        self._buffer.extend(self._iac.feed(chunk))
+        self._buffer.extend(strip_control(self._iac.feed(chunk)))
         if self._iac.replies:
             self._writer.write(bytes(self._iac.replies))
             self._iac.replies.clear()
